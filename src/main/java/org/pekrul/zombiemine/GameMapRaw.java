@@ -1,7 +1,6 @@
 package org.pekrul.zombiemine;
 
-import java.io.BufferedReader;
-import java.io.IOException;
+import java.io.*;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -18,6 +17,16 @@ public class GameMapRaw {
         this.rawLines = rawLines;
     }
 
+/*    public void write(int i) throws IOException {
+        File file = new File("" + i + ".txt");
+        BufferedWriter writer = new BufferedWriter(new FileWriter(file));
+        writer.append("1\r\n");
+        String dimensions = "" + width + " " + height + "\r\n";
+        writer.append(dimensions);
+        writer.append(String.join("\r\n", rawLines));
+        writer.close();
+    }*/
+
     public double solve() {
         Map<Mine, SortedSet<Zombie>> mineToZombies = new HashMap<>();
         LinkedList<Mine> minesInOrder = new LinkedList<>();
@@ -31,7 +40,7 @@ public class GameMapRaw {
         //todo: Prune the useless mines out
 
         //todo: run through the inputs in order
-
+        int mineId = 1;
         for (short rowNum = 0; rowNum < height; rowNum++) {
             char[] line = iterator.next().toCharArray();
             for (short colNum = 0; colNum < width; colNum++) {
@@ -41,7 +50,8 @@ public class GameMapRaw {
                 }
                 Coord c = new Coord(colNum, rowNum);
                 if (currentChar == 'M') {
-                    Mine newMine = new Mine(c);
+                    Mine newMine = new Mine(c, mineId);
+                    mineId++;
                     addMineAndStealZombies(newMine, minesInOrder, mineToZombies);
                     continue;
                 }
@@ -54,11 +64,26 @@ public class GameMapRaw {
             }
         }
 
-        List<SortedSet<Zombie>> sortedSetStream = mineToZombies.values().stream()
+        List<SortedSet<Zombie>> nonEmptyMineToZombies = mineToZombies.values().stream()
                 .filter(zombieList -> !zombieList.isEmpty()).collect(Collectors.toList());
 
-        Double answer = sortedSetStream.stream().map(zombieList -> zombieList.first().nearestMineDistance)
-                .max(Double::compare).get();
+        List<List<Zombie>> sortedResults = nonEmptyMineToZombies.stream()
+                .map(zombieList -> zombieList.stream()
+                        .sorted(Zombie::compareTo)
+                        .collect(Collectors.toList()))
+                .sorted(Comparator.comparingInt(List::size))
+                .collect(Collectors.toList());
+
+        List<List<Zombie>> sortedZombieLists = sortedResults.stream()
+                .map(zombieList -> zombieList.stream()
+                        .sorted(Zombie::compareTo)
+                        .collect(Collectors.toList()))
+                .collect(Collectors.toList());
+
+
+        double answer = sortedZombieLists.stream()
+                .map(zombieList -> zombieList.stream().findFirst().get().nearestMineDistance)
+                .max(Double::compareTo).get();
 
         return answer;
     }
@@ -73,8 +98,9 @@ public class GameMapRaw {
         Mine nextMine;
         while (mineListIterator.hasPrevious()) {
             nextMine = mineListIterator.previous();
-            if (isFirstCoordBeforeSecond(nextMine.coord,furthestBackPossible)) {
+            if (isFirstCoordBeforeSecond(nextMine.coord, furthestBackPossible)) {
                 //we've gone back too far and should already have our best in currentBest
+
                 break;
             }
             // this mine is not too far back
@@ -101,16 +127,33 @@ public class GameMapRaw {
             SortedSet<Zombie> zombiesForExistingMine = mineToZombies.get(existingMine);
             List<Zombie> stolenZombiesForMine = new ArrayList<>();
 
+            double distanceBetweenMines = newMine.coord.distance(existingMine.coord);
+            double radiusLimit = distanceBetweenMines/2.0;
+
             for (Zombie existingZombie : zombiesForExistingMine) {
                 double radiusToNewMine = existingZombie.coord.distance(newMine.coord);
+
+
                 if (radiusToNewMine < existingZombie.nearestMineDistance) {
                     //steal this!
                     existingZombie.nearestMineDistance = radiusToNewMine;
                     zombiesForNewMine.add(existingZombie);
                     stolenZombiesForMine.add(existingZombie);
-                } else {
+                }
+
+                if(radiusToNewMine < radiusLimit) {
                     //no more zombies to steal from this mine
-                    break;
+
+                    //TODO: THIS IS WRONG!
+                    //  When I take out this break and check ALL zombies against the new mine, I get the correct answer.
+
+
+                    //TODO: When mapping a list of zombies from one mine to another, we can't assume that the ordering of the first
+                    // means anything to the ordering of the second.
+
+                    //TODO: Question: When can we stop checking zombies from the first mine to the second mine?
+                    //  Is when we get past half the distance to the other mine as good as I can do?
+//                    break;
                 }
 
             }

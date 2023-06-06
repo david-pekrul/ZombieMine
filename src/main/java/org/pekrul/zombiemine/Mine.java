@@ -2,7 +2,7 @@ package org.pekrul.zombiemine;
 
 import java.util.Comparator;
 
-public class Mine implements Comparator<Mine> {
+public class Mine implements Comparator<Mine>, Comparable<Mine> {
 
     public static final Mine EMPTY_MINE = new Mine(new Coord(Short.MIN_VALUE, Short.MIN_VALUE));
 
@@ -25,5 +25,10 @@ public class Mine implements Comparator<Mine> {
     @Override
     public int compare(Mine o1, Mine o2) {
         return Integer.compare(o1.orderedId, o2.orderedId);
+    }
+
+    @Override
+    public int compareTo(Mine o) {
+        return Integer.compare(this.orderedId, o.orderedId);
     }
 }
