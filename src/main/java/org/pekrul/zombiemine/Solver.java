@@ -12,6 +12,7 @@ public class Solver {
     public static void main(String[] args) throws IOException {
 //        String filePath = "src/main/resources/individuals/11.txt";
         String filePath = "src/main/resources/k.in";
+//        String filePath = "src/main/resources/k.test";
 
         BufferedReader reader = new BufferedReader(new FileReader(filePath));
         int numberOfMaps = Integer.parseInt(reader.readLine());

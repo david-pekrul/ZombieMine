@@ -4,10 +4,10 @@ import java.util.Comparator;
 
 public class Mine implements Comparator<Mine>, Comparable<Mine> {
 
-    public static final Mine EMPTY_MINE = new Mine(new Coord(Short.MIN_VALUE, Short.MIN_VALUE));
+    public static final Mine EMPTY_MINE = new Mine(new Coord(Short.MIN_VALUE, Short.MIN_VALUE), 0, 0);
 
     public final Coord coord;
-    public float explodeDistance;
+    public double explodeDistance;
     public final int orderedId;
 
     public Mine(Coord c) {
@@ -19,6 +19,12 @@ public class Mine implements Comparator<Mine>, Comparable<Mine> {
     public Mine(Coord c, int orderedId) {
         this.coord = c;
         this.explodeDistance = 0;
+        this.orderedId = orderedId;
+    }
+
+    public Mine(Coord c, int orderedId, double explodeDistance) {
+        this.coord = c;
+        this.explodeDistance = explodeDistance;
         this.orderedId = orderedId;
     }
 
