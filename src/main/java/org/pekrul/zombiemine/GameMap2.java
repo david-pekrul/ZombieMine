@@ -7,7 +7,7 @@ import java.util.stream.Collectors;
 
 public class GameMap2 implements IGameMap {
     private Set<Zombie> zombies;
-    private Set<Mine> mines;
+    private List<Mine> mines;
     private short width;
     private short height;
     private List<String> rawLines;
@@ -16,7 +16,7 @@ public class GameMap2 implements IGameMap {
         this.width = w;
         this.height = h;
         this.zombies = z;
-        this.mines = m;
+        this.mines = m.stream().toList();
     }
 
     public double solve() {
@@ -39,9 +39,7 @@ public class GameMap2 implements IGameMap {
             if (furthestRadiusSoFar < closestMineRadius) {
                 furthestRadiusSoFar = closestMineRadius;
             }
-
         }
-
         return furthestRadiusSoFar;
     }
 
@@ -61,7 +59,7 @@ public class GameMap2 implements IGameMap {
         }
 //        double ratio = (usefulMines.size() * 1.0) / mines.size();
 //        System.out.println("Reduced mines to % of original: " + ratio);
-        mines = usefulMines;
+        mines = usefulMines.stream().toList();
     }
 
     private boolean mineInCenterPlus(Mine mine, Set<Coord> mineCoords) {
