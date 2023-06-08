@@ -4,7 +4,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.util.*;
 
-public class GameMap {
+public class GameMap implements IGameMap{
     private Set<Zombie> zombies;
     private Set<Mine> mines;
     private short width;
@@ -17,6 +17,11 @@ public class GameMap {
         this.zombies = z;
         this.mines = m;
         rawLines = new ArrayList<>(h);
+    }
+
+    @Override
+    public double solve() {
+        return 0;
     }
 
     public static class Builder {

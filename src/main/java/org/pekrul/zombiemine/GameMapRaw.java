@@ -5,16 +5,24 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class GameMapRaw {
+public class GameMapRaw implements IGameMap {
     private short width;
     private short height;
     private List<String> rawLines;
+    private SortedSet<Zombie> zombiesNotOptimallyPlaced;
 
 
     private GameMapRaw(short w, short h, List<String> rawLines) {
         this.width = w;
         this.height = h;
         this.rawLines = rawLines;
+        zombiesNotOptimallyPlaced = new TreeSet<>(new Comparator<Zombie>() {
+            @Override
+            public int compare(Zombie o1, Zombie o2) {
+                //sort in decreasing order
+                return Double.compare(o2.nearestMineDistance, o1.nearestMineDistance);
+            }
+        });
     }
 
 /*    public void write(int i) throws IOException {
@@ -33,6 +41,9 @@ public class GameMapRaw {
         SortedSet<Mine> minesInExplodeOrder = new TreeSet<>(new Comparator<Mine>() {
             @Override
             public int compare(Mine o1, Mine o2) {
+                if (o1.explodeDistance == o2.explodeDistance) {
+                    return Integer.compare(o2.orderedId, o1.orderedId);
+                }
                 return Double.compare(o2.explodeDistance, o1.explodeDistance);
             }
         });
@@ -67,7 +78,7 @@ public class GameMapRaw {
                 }
                 if (currentChar == 'Z') {
                     Zombie newZombie = new Zombie(c);
-                    addZombieToCorrectMine(newZombie, minesInExplodeOrder, minesInOrder, mineToZombies);
+                    addZombieToCorrectMine2(newZombie, minesInExplodeOrder, minesInOrder, mineToZombies);
                     //todo: Add this zombie to the correct mine's list in the correct order;
                     continue;
                 }
@@ -133,18 +144,85 @@ public class GameMapRaw {
         }
     }
 
+    private void addZombieToCorrectMine2(Zombie newZombie, SortedSet<Mine> minesInExplodeOrder, LinkedList<Mine> minesInOrder, Map<Mine, SortedSet<Zombie>> mineToZombies) {
+
+        /*
+            The first/furthest Zombie for each mine is associated with the closest mine.
+            Every other mine in the list either doesn't matter in the final result, or will be stolen by future mine.
+            So what if every zombie isn't assigned to its closest mine? That isn't necessary for the solution.
+            -> Here's what: This zombie might slot into a mine, but never gets stolen by the closer mine because the closer mine was already read in!
+            -> Keep track of which zombies were "Best-ish" placed. When they become the "best" for any mine, then we need to do the work of finding a better fit for them.
+         */
+        //TODO: There are some edge cases that this is failing on. #8, #11, #13, #15 (out of 17)
+        boolean usedBestIsh = false;
+        Mine closestMine = Mine.EMPTY_MINE;
+        double closestRadius = Double.MAX_VALUE;
+        for (Mine nextMine : minesInExplodeOrder) {
+            double radius = nextMine.coord.distance(newZombie.coord);
+            if (radius < nextMine.explodeDistance) {
+                //This one is "good enough"
+                usedBestIsh = true;
+                newZombie.nearestMineDistance = radius;
+                mineToZombies.get(nextMine).add(newZombie);
+                zombiesNotOptimallyPlaced.add(newZombie);
+                //no need to resort the mines because this one didn't modify the explode radius of this mine
+                break;
+            }
+            if (radius < closestRadius) {
+                closestMine = nextMine;
+                closestRadius = radius;
+            }
+        }
+        if (!usedBestIsh) {
+            //we need to add this to the closest mine!
+            newZombie.nearestMineDistance = closestRadius;
+            closestMine.explodeDistance = closestRadius;
+            minesInExplodeOrder.remove(closestMine);
+            minesInExplodeOrder.add(closestMine);
+            mineToZombies.get(closestMine).add(newZombie);
+        }
+    }
+
     private void addMineAndStealZombies2(Mine newMine, SortedSet<Mine> minesInExplodeOrder, LinkedList<Mine> minesInOrder, Map<Mine, SortedSet<Zombie>> mineToZombies) {
         boolean done = false;
-        Mine existingMine;
+        Mine existingMine = null;
         Mine lastExistingMine = null;
         newMine.explodeDistance = 0;
 
         SortedSet<Zombie> zombiesForNewMine = new TreeSet<>();
-        while (!done) {
-            existingMine = minesInExplodeOrder.first();
-            if (existingMine.explodeDistance <= newMine.explodeDistance || existingMine.equals(lastExistingMine)) {
-                break; //there is no point of stealing further, as it won't change the current overall result.
+
+        SortedSet<Zombie> zombiesToPlace = new TreeSet<>(new Comparator<Zombie>() {
+            @Override
+            public int compare(Zombie o1, Zombie o2) {
+                return Double.compare(o2.nearestMineDistance, o1.nearestMineDistance);
             }
+        });
+        Set<Mine> alreadyStolenFromMines = new HashSet<>();
+
+        while (true) {
+            //this mine needs to keep stealing from ALL the mines that have larger radii than it.
+            existingMine = null;
+            for (Mine otherMine : minesInExplodeOrder) {
+                if (otherMine.explodeDistance < newMine.explodeDistance) {
+                    break; //no more mines to steal from on this loop
+                }
+                if (otherMine.equals(newMine)) {
+                    break;
+                }
+                if (alreadyStolenFromMines.contains(otherMine)) {
+                    continue;
+                }
+                existingMine = otherMine;
+                break;
+            }
+
+            if (existingMine == null) {
+                //done
+                break;
+            }
+
+            alreadyStolenFromMines.add(existingMine);
+
             SortedSet<Zombie> zombiesForExistingMine = mineToZombies.get(existingMine);
             if (zombiesForExistingMine.isEmpty()) {
                 break;
@@ -158,18 +236,28 @@ public class GameMapRaw {
                     existingZombie.nearestMineDistance = radiusToNewMine;
                     zombiesForNewMine.add(existingZombie);
                     stolenZombiesForMine.add(existingZombie);
+                    zombiesNotOptimallyPlaced.remove(existingZombie); //this zombie is now optimally placed in the best mine so far.
                 }
             }
             if (!stolenZombiesForMine.isEmpty()) {
                 zombiesForExistingMine.removeAll(stolenZombiesForMine);
-                zombiesForNewMine.addAll(stolenZombiesForMine);
+
+                //remove any non-optimally placed zombies from this mine also.
+                List<Zombie> zombiesNeedingRehomed = zombiesForExistingMine.stream().takeWhile(z -> zombiesNotOptimallyPlaced.contains(z)).collect(Collectors.toList());
+                zombiesForExistingMine.removeAll(zombiesNeedingRehomed);
+                zombiesNotOptimallyPlaced.removeAll(zombiesNeedingRehomed);
+                zombiesToPlace.addAll(zombiesNeedingRehomed);
 
                 //remove and re-insert the mine that was stolen from back into the set
                 minesInExplodeOrder.remove(existingMine);
                 existingMine.explodeDistance = mineToZombies.get(existingMine).stream().map(z -> z.nearestMineDistance).findFirst().orElseGet(() -> 0.0);
                 minesInExplodeOrder.add(existingMine);
                 newMine.explodeDistance = zombiesForNewMine.first().nearestMineDistance;
+
+                //add
+                zombiesForNewMine.addAll(stolenZombiesForMine);
             }
+
             lastExistingMine = existingMine;
         }
 
@@ -180,6 +268,13 @@ public class GameMapRaw {
         mineToZombies.put(newMine, zombiesForNewMine);
         minesInExplodeOrder.add(newMine);
         minesInOrder.add(newMine);
+
+        if (!zombiesToPlace.isEmpty()) {
+            long currentTime = System.currentTimeMillis();
+            for (Zombie zombieNeedingRehomed : zombiesToPlace) {
+                addZombieToCorrectMine2(zombieNeedingRehomed, minesInExplodeOrder, minesInOrder, mineToZombies);
+            }
+        }
     }
 
 

@@ -9,6 +9,10 @@ public class Coord {
         this.y = y;
     }
 
+    public Coord(int x, int y){
+        this((short)x,(short)y);
+    }
+
     public double distance(Coord c2) {
         return Coord.distance(this, c2);
     }
