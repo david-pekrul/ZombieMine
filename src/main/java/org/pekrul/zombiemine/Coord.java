@@ -11,7 +11,7 @@ public class Coord {
     private static boolean alreadyInit = false;
 
     public static void initDistances() {
-        if(alreadyInit){
+        if (alreadyInit) {
             return;
         }
         System.out.println("starting initDistances");
@@ -59,6 +59,10 @@ public class Coord {
         int j = Math.abs(c1.y - c2.y);
         return precalcedDistances[i][j];
 //        return Math.sqrt(Math.pow(c1.x - c2.x, 2) + Math.pow(c1.y - c2.y, 2));
+    }
+
+    public Coord applyVector(Coord vector) {
+        return new Coord(this.x + vector.x, this.y + vector.y);
     }
 
     public Set<Coord> applyOffsets(Coord offset) {
