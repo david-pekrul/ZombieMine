@@ -25,7 +25,7 @@ public class GameMap2 implements IGameMap {
         Set<Integer> remainingZombies = new TreeSet<>(zombies);
         Map<Integer, Double> zombieToShortestKnownRadius = new HashMap<>(zombies.size());
         zombies.forEach(z -> zombieToShortestKnownRadius.put(z, Double.MAX_VALUE));
-
+        Random random = new Random();
 
         //From the previous best mine, get as FAR away as possible and solve that zombie.
         //This works really well for maps where the zombies and mines are partitioned a bit.
@@ -79,6 +79,7 @@ public class GameMap2 implements IGameMap {
             double furthestZombieRadius = 0;
             final List<Integer> zombieArray = remainingZombies.stream().toList();
 
+            SortedMap<Double, Integer> radiusToZombie = new TreeMap<>();
             for (int i = 0; i < zombieArray.size(); i++) {
                 int remainingZombie = zombieArray.get(i);
                 //from the mine, remove any zombies that it has to wipe out
@@ -87,12 +88,22 @@ public class GameMap2 implements IGameMap {
                     remainingZombies.remove(remainingZombie);
 //                    zombiesToRemove.add(remainingZombie);
                 }
+                radiusToZombie.putIfAbsent(currentRadius, remainingZombie);
 //                zombieToShortestKnownRadius.compute(remainingZombie, (k, v) -> Math.min(v, currentRadius));
-                if (furthestZombieRadius < currentRadius) {
-                    furthestZombieRadius = currentRadius;
-                    furthestZombie = remainingZombie;
-                }
+//                if (furthestZombieRadius < currentRadius) {
+//                    furthestZombieRadius = currentRadius;
+//                    furthestZombie = remainingZombie;
+//                }
             }
+            List<Map.Entry<Double, Integer>> entries = radiusToZombie.entrySet().stream().toList();
+            int entrySize = entries.size();
+            if (entrySize > 1) {
+                furthestZombie = entries.get(random.nextInt(0, entrySize)).getValue();
+            } else {
+                furthestZombie = -1;
+            }
+
+
 //            remainingZombies.removeAll(zombiesToRemove);
 //            System.out.println(String.format("Removed %d zombies at %f radius. \tZombies remaining: %d\tMine count: %d", zombiesToRemove.size(), maxOfMinRadii, remainingZombies.size(), numberOfMines));
 //            System.out.print("");
