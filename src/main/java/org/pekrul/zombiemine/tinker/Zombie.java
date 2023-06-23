@@ -1,4 +1,6 @@
-package org.pekrul.zombiemine;
+package org.pekrul.zombiemine.tinker;
+
+import org.pekrul.zombiemine.Coord;
 
 import java.util.Comparator;
 

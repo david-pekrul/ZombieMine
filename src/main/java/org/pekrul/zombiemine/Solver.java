@@ -11,24 +11,17 @@ public class Solver {
 
 
     public static void main(String[] args) throws IOException {
-//        String filePath = "src/main/resources/individuals/20.txt";
-//        String filePath = "src/main/resources/individuals/1.txt";
-//        String filePath = "src/main/resources/individuals/10.txt";
-//        String filePath = "src/main/resources/individuals/18.txt";
 //        String filePath = "src/main/resources/individuals/24.txt";
-//        String filePath = "src/main/resources/k.test";
         String filePath = "src/main/resources/k.in";
         long start = System.currentTimeMillis();
-//        Coord.initDistances();
         BufferedReader reader = new BufferedReader(new FileReader(filePath));
         int numberOfMaps = Integer.parseInt(reader.readLine());
         for (int i = 0; i < numberOfMaps; i++) {
             long mapStart = System.currentTimeMillis();
-//            IGameMap currentMap = (new GameMapRaw.Builder().withInput(reader)).build();
-            IGameMap currentMap = (new GameMap2.Builder().withInput(reader)).build();
+            IGameMap currentMap = (new GameMapFastInteger.Builder().withInput(reader)).build();
             double answer = currentMap.solve();
             long mapEnd = System.currentTimeMillis();
-            System.out.println("" + (i + 1) + "\t-> " + df.format(answer) + "\t\t" + TIME_IN_SECONDS_FORMAT.format((mapEnd - mapStart) / 1000.0));
+            System.out.println("" + (i + 1) + "\t-> " + df.format(answer) + "\t\t" + TIME_IN_SECONDS_FORMAT.format((mapEnd - mapStart) / 1000.0) + "s");
         }
         long end = System.currentTimeMillis();
         System.out.println("Total Time: " + TIME_IN_SECONDS_FORMAT.format((end - start) / 1000.0));

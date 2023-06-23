@@ -1,19 +1,21 @@
-package org.pekrul.zombiemine;
+package org.pekrul.zombiemine.tinker;
+
+import org.pekrul.zombiemine.Coord;
+import org.pekrul.zombiemine.IGameMap;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
-public class GameMapDirection implements IGameMap {
+public class GameMap implements IGameMap {
     private List<Coord> zombies;
     private Set<Coord> mines;
-    private Set<Coord> originalMines;
     private short width;
     private short height;
     private List<String> rawLines;
 
-    private GameMapDirection(short w, short h, List<Coord> z, Set<Coord> m) {
+    private GameMap(short w, short h, List<Coord> z, Set<Coord> m) {
         this.width = w;
         this.height = h;
         this.zombies = z;
@@ -21,100 +23,93 @@ public class GameMapDirection implements IGameMap {
     }
 
     public double solve() {
+        double maxOfMinRadii = 0;
         pruneMines();
 
+        Set<Coord> remainingMines = new HashSet<>(mines);
         Set<Coord> remainingZombies = new HashSet<>(zombies);
-        double radiusAnswer = 0;
-        int rejectionCountAtRadius = 0;
-        //pick the first zombie
-        Coord nextZombie = null;
+
+        double minRadiusAlreadyCleared = 0;
+
         while (!remainingZombies.isEmpty()) {
-            Coord currentZombie;
-            if (nextZombie == null) {
-                currentZombie = remainingZombies.stream().findAny().get();
-            } else {
-                currentZombie = nextZombie;
-                nextZombie = null;
-            }
+
+            Coord currentZombie = remainingZombies.stream().findAny().get();
 
             double closestMineRadius = Double.MAX_VALUE;
             Coord closestMine = null;
+            Coord lastBestMine = null;
             remainingZombies.remove(currentZombie);
 
             //Find the smallest radius from this zombie to any mine.
             boolean foundUselessZombie = false;
-            for (Coord currentMine : mines) {
+            for (Coord currentMine : remainingMines) {
                 double currentRadius = Coord.distance(currentZombie, currentMine);
                 if (currentRadius < closestMineRadius) {
                     closestMineRadius = currentRadius;
                     closestMine = currentMine;
                 }
-                if (currentRadius < radiusAnswer) {
+                if (currentRadius < maxOfMinRadii) {
                     foundUselessZombie = true;
-                    rejectionCountAtRadius++;
+                    lastBestMine = currentMine;
                     break;
                 }
             }
-            if (foundUselessZombie) {
-                continue;
+//            if (foundUselessZombie) {
+//                continue;
+//            }
+
+            if (maxOfMinRadii < closestMineRadius) {
+                maxOfMinRadii = closestMineRadius;
             }
 
-            if (radiusAnswer < closestMineRadius) {
-                radiusAnswer = closestMineRadius;
-//                System.out.println(String.format("\tRejection Count: %d for radius %f", rejectionCountAtRadius, radiusAnswer));
-                rejectionCountAtRadius = 0;
+            if (lastBestMine != null) {
+                //we can clear out the zombies from around this mine as well?
+                expandFromMine(lastBestMine, 0, maxOfMinRadii, remainingZombies);
             }
 
-            //At this point, we know that currentZombie is absolutely closest to closestMine
-            //Start walking from this zombie away from the mine until either another zombie is found, or the edge of the map.
-            Coord awayVector = getAwayVector(closestMine, currentZombie);
 
-            Coord nextPossibleZombie = currentZombie.applyVector(awayVector);
-            //walk the awayVector from the currentMine until I find a mine or am off the map;
-            boolean done = false;
-            while (!done) {
-                if (nextPossibleZombie.x < 0 || nextPossibleZombie.y < 0 || nextPossibleZombie.x >= width || nextPossibleZombie.y > height || originalMines.contains(nextPossibleZombie)) {
-                    nextZombie = null;
-                    done = true;
-                    break;
-                }
-                if (remainingZombies.contains(nextPossibleZombie)) {
-                    //found one!
-                    nextZombie = nextPossibleZombie;
-                    break;
-                }
+            //We know at this point that maxOfMinRadii is non-zero and there is at least one zombie that requires this
+            //explode radius. We can then remove all zombies that are at or closer than this radius to this mine.
+//            Set<Coord> zombiesToRemove = new HashSet<>();
+//            if (maxOfMinRadii > minRadiusAlreadyCleared) {
+//                for (Coord zombie : remainingZombies) {
+//                    if (zombie.distance(closestMine) <= maxOfMinRadii) {
+//                        zombiesToRemove.add(zombie);
+//                    }
+//                }
+//                remainingZombies.removeAll(zombiesToRemove);
+//                minRadiusAlreadyCleared = maxOfMinRadii;
+//            }
 
-                //keep walking away
-                nextPossibleZombie = nextPossibleZombie.applyVector(awayVector);
-            }
+            // For this current mine what is the max radius that it would take for THIS mine to clear the map?
+//            double maxRadiusForThisMineToClearMap = 0;
+//            for (Coord Zombie : remainingZombies) {
+//
+//
+//            }
+
         }
-
-//        System.out.println(String.format("\tRejection Count: %d for radius %f", rejectionCountAtRadius, radiusAnswer));
-        return radiusAnswer;
+        return maxOfMinRadii;
     }
 
-    Coord getAwayVector(Coord mine, Coord zombie) {
-        Coord fullVector = new Coord(zombie.x - mine.x, zombie.y - mine.y);
-        double slope = (fullVector.y * 1.0) / (fullVector.x * 1.0);
-        double absSlope = Math.abs(slope);
+    private void expandFromMine(Coord mine, double minRadius, double maxRadius, Set<Coord> zombies) {
+        Set<Coord> potentialZombieCoords = Coord.radiusToCoords.entrySet().stream()
 
-        Coord resultVector = null;
-        if (absSlope <= 0.25) {
-            resultVector = new Coord((int) Math.copySign(1, fullVector.x), 0);
-        } else if (absSlope <= 4) {
-            resultVector = new Coord((int) Math.copySign(1, fullVector.x), (int) Math.copySign(1, fullVector.y));
-        } else {
-            resultVector = new Coord(0, (int) Math.copySign(1, fullVector.y));
-        }
+                .takeWhile(kv -> kv.getKey() <= maxRadius)
+                .filter(kv -> kv.getKey() >= minRadius)
+                .flatMap(kv -> kv.getValue().stream())
+                .flatMap(offset -> mine.applyOffsets(offset).stream())
+                .collect(Collectors.toSet());
 
+        int initial = zombies.size();
+        zombies.removeAll(potentialZombieCoords);
+        int after = zombies.size();
 
-        return resultVector;
+//        System.out.println("\tRemoving " + (initial - after) + " zombies.");
     }
-
 
     private void pruneMines() {
         Set<Coord> mineCoords = mines.stream().collect(Collectors.toSet());
-        originalMines = new HashSet<>(mines);
         Set<Coord> usefulMines = new HashSet<>(mineCoords.size());
 
         for (Coord mine : mines) {
@@ -130,6 +125,9 @@ public class GameMapDirection implements IGameMap {
             }
             usefulMines.add(mine);
         }
+//        double ratio = (usefulMines.size() * 1.0) / mines.size();
+//        System.out.println("Reduced mines to % of original: " + ratio);
+//        System.out.println("\tmines: " + mines.size() + "\t->\t" + usefulMines.size());
         mines = usefulMines;
     }
 
@@ -205,7 +203,7 @@ public class GameMapDirection implements IGameMap {
             return this;
         }
 
-        public GameMapDirection build() throws IOException {
+        public GameMap build() throws IOException {
 
 
             StringTokenizer stringTokenizer = new StringTokenizer(reader.readLine(), " ");
@@ -238,7 +236,7 @@ public class GameMapDirection implements IGameMap {
                 }
             }
 
-            return new GameMapDirection(width, height, zombies, mines);
+            return new GameMap(width, height, zombies, mines);
         }
     }
 

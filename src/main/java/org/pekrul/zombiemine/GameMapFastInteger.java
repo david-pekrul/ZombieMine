@@ -5,13 +5,16 @@ import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
-public class GameMap2 implements IGameMap {
+public class GameMapFastInteger implements IGameMap {
+    /* Use Integers for storing coordinates. Saves from creating yet another object. However, I didn't do extensive benchmarks to verify this is necessary. */
     private List<Integer> zombies;
     private Set<Integer> mines;
     private short width;
     private short height;
+    Random random = new Random();
 
-    private GameMap2(short w, short h, List<Integer> z, Set<Integer> m) {
+
+    private GameMapFastInteger(short w, short h, List<Integer> z, Set<Integer> m) {
         this.width = w;
         this.height = h;
         this.zombies = z;
@@ -19,13 +22,14 @@ public class GameMap2 implements IGameMap {
     }
 
     public double solve() {
+        // This stores the answer.
         double maxOfMinRadii = 0;
+
+        //Get rid of any mines that are geometrically impossible to be the closest to a mine.
         pruneMines();
-        Set<Integer> remainingMines = new HashSet<>(mines);
-        Set<Integer> remainingZombies = new TreeSet<>(zombies);
-        Map<Integer, Double> zombieToShortestKnownRadius = new HashMap<>(zombies.size());
-        zombies.forEach(z -> zombieToShortestKnownRadius.put(z, Double.MAX_VALUE));
-        Random random = new Random();
+        List<Integer> remainingMines = new ArrayList<>(mines);
+        Set<Integer> remainingZombies = new TreeSet<>(zombies); //I don't know why, but re-hashing this seems to really make a huge difference.
+
 
         //From the previous best mine, get as FAR away as possible and solve that zombie.
         //This works really well for maps where the zombies and mines are partitioned a bit.
@@ -34,6 +38,8 @@ public class GameMap2 implements IGameMap {
 
         while (!remainingZombies.isEmpty()) {
             Integer currentZombie;
+
+            //Determine which Zombie we are going to use next.
             if (furthestZombie != -1) {
                 currentZombie = furthestZombie;
                 furthestZombie = -1;
@@ -41,13 +47,11 @@ public class GameMap2 implements IGameMap {
                 currentZombie = remainingZombies.stream().findAny().get();
             }
 
-            double closestMineRadius = Double.MAX_VALUE;
+            //We have a zombie to calculate. Remove it from the remaining set.
             remainingZombies.remove(currentZombie);
 
-            if (zombieToShortestKnownRadius.getOrDefault(currentZombie, Double.MAX_VALUE) < maxOfMinRadii) {
-                //already found a mine closer to this zombie than the answer.
-                continue;
-            }
+            //For this zombie, we start the radius at the max value, and try to shrink it as we go.
+            double closestMineRadius = Double.MAX_VALUE;
 
             //Find the smallest radius from this zombie to any mine.
             int bestMine = -1;
@@ -59,6 +63,8 @@ public class GameMap2 implements IGameMap {
                     bestMine = currentMine;
                 }
                 if (currentRadius < maxOfMinRadii) {
+                    //Found a mine that was closer to this zombie than our current maxOfMinRadii.
+                    //This zombie is not a limiting factor, so we can skip over it.
                     foundUselessZombie = true;
                     bestMine = currentMine;
                     break;
@@ -70,61 +76,62 @@ public class GameMap2 implements IGameMap {
             }
 
             //STATE: currentZombie is absolutely closest to bestMine.
+            //If we got this far, every mine was further away than the previous maxOfMinRadii
+            //Still doing the check because it reads better.
             if (maxOfMinRadii < closestMineRadius) {
                 maxOfMinRadii = closestMineRadius;
             }
 
-            List<Integer> zombiesToRemove = new ArrayList<>();
 
-            double furthestZombieRadius = 0;
-            final List<Integer> zombieArray = remainingZombies.stream().toList();
-
-            SortedMap<Double, Integer> radiusToZombie = new TreeMap<>();
-            for (int i = 0; i < zombieArray.size(); i++) {
-                int remainingZombie = zombieArray.get(i);
-                //from the mine, remove any zombies that it has to wipe out
-                double currentRadius = calcDistancce(remainingZombie, bestMine);
-                if (currentRadius <= maxOfMinRadii) {
-                    remainingZombies.remove(remainingZombie);
-//                    zombiesToRemove.add(remainingZombie);
-                }
-                radiusToZombie.putIfAbsent(currentRadius, remainingZombie);
-//                zombieToShortestKnownRadius.compute(remainingZombie, (k, v) -> Math.min(v, currentRadius));
-//                if (furthestZombieRadius < currentRadius) {
-//                    furthestZombieRadius = currentRadius;
-//                    furthestZombie = remainingZombie;
-//                }
-            }
-            List<Map.Entry<Double, Integer>> entries = radiusToZombie.entrySet().stream().toList();
-            int entrySize = entries.size();
-            if (entrySize > 1) {
-                furthestZombie = entries.get(random.nextInt(0, entrySize)).getValue();
-            } else {
-                furthestZombie = -1;
-            }
-
-
-//            remainingZombies.removeAll(zombiesToRemove);
-//            System.out.println(String.format("Removed %d zombies at %f radius. \tZombies remaining: %d\tMine count: %d", zombiesToRemove.size(), maxOfMinRadii, remainingZombies.size(), numberOfMines));
-//            System.out.print("");
+            // We now have a mine that was closest to a zombie.
+            // From this mine, I want to get "the hell outta Dodge".
+            // Find a zombie that is "reasonably far away"
+            furthestZombie = findNextZombie(remainingZombies, maxOfMinRadii, bestMine);
         }
         return maxOfMinRadii;
     }
 
-    private void expandFromMine(Coord mine, double minRadius, double maxRadius, Set<Coord> zombies) {
-        Set<Coord> potentialZombieCoords = Coord.radiusToCoords.entrySet().stream()
+    private int findNextZombie(Set<Integer> zombies, double maxOfMinRadii, Integer bestMine) {
+        Integer furthestZombie = -1;
+        double furthestDistanceSoFar = 0;
+//        SortedMap<Double, Integer> radiusToZombie = new TreeMap<>();
+//        List<Integer> zombieArray = new ArrayList<>(zombies);
+        List<Integer> zombiesInAscendingDistance = new ArrayList<>(zombies.size());
+//        for (int i = 0; i < zombieArray.size(); i++) {
+//        for (Iterator<Integer> i = zombies.iterator(); i.hasNext(); ) {
+        Iterator<Integer> i = zombies.iterator();
+        int size = zombies.size();
+        for (int idx = 0; idx < size; idx++) {
+//            int remainingZombie = i.next();
+//            int remainingZombie = zombieArray.get(i);
+            int remainingZombie = i.next();
+            //from the mine, remove any zombies that it has to wipe out
 
-                .takeWhile(kv -> kv.getKey() <= maxRadius)
-                .filter(kv -> kv.getKey() >= minRadius)
-                .flatMap(kv -> kv.getValue().stream())
-                .flatMap(offset -> mine.applyOffsets(offset).stream())
-                .collect(Collectors.toSet());
+            double currentRadius = calcDistancce(remainingZombie, bestMine);
+            if (currentRadius <= maxOfMinRadii) {
+//                zombies.remove(remainingZombie);
+                i.remove();
+                continue;
+            }
+            if (currentRadius > furthestDistanceSoFar) {
+//                radiusToZombie.putIfAbsent(currentRadius, remainingZombie);
+                zombiesInAscendingDistance.add(remainingZombie);
+                furthestDistanceSoFar = currentRadius;
+            }
+        }
 
-        int initial = zombies.size();
-        zombies.removeAll(potentialZombieCoords);
-        int after = zombies.size();
-
-//        System.out.println("\tRemoving " + (initial - after) + " zombies.");
+//        List<Map.Entry<Double, Integer>> entries = radiusToZombie.entrySet().stream().toList();
+//        int entrySize = entries.size();
+        int entrySize = zombiesInAscendingDistance.size();
+        if (entrySize > 1) {
+//            furthestZombie = entries.get(random.nextInt(0, entrySize)).getValue();
+//            furthestZombie = entries.get((int) (entrySize * 0.9)).getValue();
+//            furthestZombie = zombiesInAscendingDistance.get((int) (entrySize * 0.75));
+            furthestZombie = zombiesInAscendingDistance.get(random.nextInt(0, entrySize));
+        } else {
+            furthestZombie = -1;
+        }
+        return furthestZombie;
     }
 
     private void pruneMines() {
@@ -237,7 +244,7 @@ public class GameMap2 implements IGameMap {
             return this;
         }
 
-        public GameMap2 build() throws IOException {
+        public GameMapFastInteger build() throws IOException {
 
 
             StringTokenizer stringTokenizer = new StringTokenizer(reader.readLine(), " ");
@@ -268,7 +275,7 @@ public class GameMap2 implements IGameMap {
                 }
             }
 
-            return new GameMap2(width, height, zombies, mines);
+            return new GameMapFastInteger(width, height, zombies, mines);
         }
     }
 
